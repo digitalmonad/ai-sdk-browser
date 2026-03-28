@@ -20,6 +20,11 @@ export default function Home() {
   const [isCached, setIsCached] = useState<boolean | null>(null);
   const [inferenceTime, setInferenceTime] = useState<number | null>(null);
 
+  const [input2, setInput2] = useState("");
+  const [result2, setResult2] = useState<number[] | null>(null);
+  const [loading2, setLoading2] = useState(false);
+  const [inferenceTime2, setInferenceTime2] = useState<number | null>(null);
+
   const embeddingModel = useMemo(() => {
     return transformersJS.embedding(MODEL_ID, {
       device: "wasm",
@@ -100,6 +105,26 @@ export default function Home() {
     }
   }
 
+  function cosineSimilarity(a: number[], b: number[]): number {
+    if (a.length !== b.length) {
+      throw new Error("Vectors must have the same length");
+    }
+
+    let dot = 0;
+    let magA = 0;
+    let magB = 0;
+
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      magA += a[i] * a[i];
+      magB += b[i] * b[i];
+    }
+
+    if (magA === 0 || magB === 0) return 0;
+
+    return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+  }
+
   async function handleEmbed() {
     if (!embeddingModel || !input.trim()) return;
     setLoading(true);
@@ -122,8 +147,29 @@ export default function Home() {
     }
   }
 
+  async function handleEmbed2() {
+    if (!embeddingModel || !input2.trim()) return;
+    setLoading2(true);
+    setInferenceTime2(null);
+    try {
+      const start = performance.now();
+      const { embedding } = await embed({
+        model: embeddingModel,
+        value: input2,
+      });
+      const ms = performance.now() - start;
+      setResult2(embedding);
+      setInferenceTime2(ms);
+      toast.success(`Embedding B computed (${Math.round(ms)} ms)`);
+    } catch {
+      toast.error("Failed to compute embedding B");
+    } finally {
+      setLoading2(false);
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-zinc-900">
+    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-neutral-950">
       <main className="flex min-h-screen w-full max-w-3xl flex-col py-8 px-4">
         <div className="flex items-center gap-2 mb-6">
           <h1 className="text-xl font-semibold">Embedding playground</h1>
@@ -225,51 +271,221 @@ export default function Home() {
           )}
         </div>
 
-        <div className="flex gap-2 mb-4">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleEmbed();
-              }
-            }}
-            placeholder="Text to embed..."
-            className="flex-1 rounded-sm border p-2 dark:bg-zinc-800 dark:border-zinc-700"
-          />
-          <button
-            onClick={handleEmbed}
-            disabled={loading || !input.trim() || !modelReady}
-            className="rounded-sm bg-blue-600/30 border border-blue-600 hover:bg-blue-600/50 disabled:hover:bg-blue-600/30 px-4 py-2 text-white disabled:opacity-50 cursor-pointer disabled:cursor-default"
-          >
-            {loading ? "Computing..." : "Embed"}
-          </button>
-        </div>
-
-        <div className="mb-4 text-xs text-zinc-500">
-          {loading ? (
-            <span>Running inference…</span>
-          ) : inferenceTime !== null ? (
-            <span>
-              Inference duration:{" "}
-              <span className="font-mono text-zinc-700 dark:text-zinc-300">
-                {Math.round(inferenceTime)} ms
-              </span>
-            </span>
-          ) : (
-            <span>Last inference: —</span>
-          )}
-        </div>
-
-        {result && (
-          <div className="rounded-lg bg-zinc-100 dark:bg-zinc-800 p-4 text-xs font-mono overflow-auto">
-            <p className="mb-1 text-zinc-500">Dimensions: {result.length}</p>
-            <p className="break-all">
-              [{result.map((v) => v.toFixed(4)).join(", ")}]
+        <div className="space-y-3 mb-4">
+          {/* Input A */}
+          <div>
+            <p className="text-xs text-zinc-500 mb-1">Text A</p>
+            <div className="flex gap-2">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleEmbed();
+                  }
+                }}
+                placeholder="First text to embed…"
+                className="flex-1 rounded-sm border p-2 dark:bg-zinc-800 dark:border-zinc-700"
+              />
+              <button
+                onClick={handleEmbed}
+                disabled={loading || !input.trim() || !modelReady}
+                className="rounded-sm bg-blue-600/30 border border-blue-600 hover:bg-blue-600/50 disabled:hover:bg-blue-600/30 px-4 py-2 text-white disabled:opacity-50 cursor-pointer disabled:cursor-default"
+              >
+                {loading ? "Computing…" : "Embed A"}
+              </button>
+            </div>
+            <p className="text-xs text-zinc-400 mt-1">
+              {loading ? (
+                "Running inference…"
+              ) : inferenceTime !== null ? (
+                <>
+                  Inference:{" "}
+                  <span className="font-mono text-zinc-600 dark:text-zinc-300">
+                    {Math.round(inferenceTime)} ms
+                  </span>
+                </>
+              ) : (
+                "—"
+              )}
             </p>
           </div>
+
+          {/* Input B */}
+          <div>
+            <p className="text-xs text-zinc-500 mb-1">Text B</p>
+            <div className="flex gap-2">
+              <input
+                value={input2}
+                onChange={(e) => setInput2(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleEmbed2();
+                  }
+                }}
+                placeholder="Second text to embed…"
+                className="flex-1 rounded-sm border p-2 dark:bg-zinc-800 dark:border-zinc-700"
+              />
+              <button
+                onClick={handleEmbed2}
+                disabled={loading2 || !input2.trim() || !modelReady}
+                className="rounded-sm bg-blue-600/30 border border-blue-600 hover:bg-blue-600/50 disabled:hover:bg-blue-600/30 px-4 py-2 text-white disabled:opacity-50 cursor-pointer disabled:cursor-default"
+              >
+                {loading2 ? "Computing…" : "Embed B"}
+              </button>
+            </div>
+            <p className="text-xs text-zinc-400 mt-1">
+              {loading2 ? (
+                "Running inference…"
+              ) : inferenceTime2 !== null ? (
+                <>
+                  Inference:{" "}
+                  <span className="font-mono text-zinc-600 dark:text-zinc-300">
+                    {Math.round(inferenceTime2)} ms
+                  </span>
+                </>
+              ) : (
+                "—"
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* Similarity */}
+        {result &&
+          result2 &&
+          (() => {
+            const sim = cosineSimilarity(result, result2);
+            const pct = Math.round(sim * 100);
+            const color =
+              sim > 0.85
+                ? "bg-green-500"
+                : sim > 0.5
+                  ? "bg-yellow-400"
+                  : "bg-red-400";
+            return (
+              <div className="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                    Cosine similarity
+                  </span>
+                  <span className="font-mono text-zinc-700 dark:text-zinc-300">
+                    {sim.toFixed(4)}
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${color}`}
+                    style={{ width: `${Math.max(pct, 2)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-zinc-500">
+                  {sim > 0.85
+                    ? "Very similar"
+                    : sim > 0.5
+                      ? "Somewhat similar"
+                      : "Not similar"}
+                </p>
+              </div>
+            );
+          })()}
+
+        {/* Raw vectors */}
+        {(result || result2) && (
+          <div className="space-y-2">
+            {result && (
+              <div className="rounded-lg bg-zinc-100 dark:bg-zinc-800 p-3 text-xs font-mono overflow-auto">
+                <p className="mb-1 text-zinc-500">A — {result.length} dims</p>
+                <p className="break-all">
+                  [
+                  {result
+                    .slice(0, 12)
+                    .map((v) => v.toFixed(4))
+                    .join(", ")}
+                  , …]
+                </p>
+                <details className="mt-2 bg-white/50 dark:bg-zinc-900/50 p-2 rounded">
+                  <summary className="cursor-pointer text-xs text-zinc-600 dark:text-zinc-400">
+                    Show full embedding
+                  </summary>
+                  <div className="mt-2 text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all">
+                    [
+                    {result.map((v, i) => (
+                      <span key={i}>
+                        {v.toFixed(6)}
+                        {i < result.length - 1 ? ", " : ""}
+                      </span>
+                    ))}
+                    ]
+                  </div>
+                </details>
+              </div>
+            )}
+            {result2 && (
+              <div className="rounded-lg bg-zinc-100 dark:bg-zinc-800 p-3 text-xs font-mono overflow-auto">
+                <p className="mb-1 text-zinc-500">B — {result2.length} dims</p>
+                <p className="break-all">
+                  [
+                  {result2
+                    .slice(0, 12)
+                    .map((v) => v.toFixed(4))
+                    .join(", ")}
+                  , …]
+                </p>
+                <details className="mt-2 bg-white/50 dark:bg-zinc-900/50 p-2 rounded">
+                  <summary className="cursor-pointer text-xs text-zinc-600 dark:text-zinc-400">
+                    Show full embedding
+                  </summary>
+                  <div className="mt-2 text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all">
+                    [
+                    {result2.map((v, i) => (
+                      <span key={i}>
+                        {v.toFixed(6)}
+                        {i < result2.length - 1 ? ", " : ""}
+                      </span>
+                    ))}
+                    ]
+                  </div>
+                </details>
+              </div>
+            )}
+          </div>
         )}
+
+        {/* Explanations: embeddings & cosine similarity */}
+        <div className="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 space-y-2 text-sm">
+          <h2 className="text-base font-medium text-zinc-700 dark:text-zinc-300">
+            What are embeddings?
+          </h2>
+          <p className="text-zinc-600 dark:text-zinc-400">
+            Embeddings are numerical vectors that represent the meaning of text
+            in a vector space. Similar texts have embeddings that are close to
+            each other, which enables search, recommendations, clustering, and
+            other operations based on similarity.
+          </p>
+
+          <h2 className="text-base font-medium text-zinc-700 dark:text-zinc-300">
+            What is cosine similarity?
+          </h2>
+          <p className="text-zinc-600 dark:text-zinc-400">
+            Cosine similarity is a metric that measures how similar two vectors
+            are by comparing the angle between them (the normalized dot
+            product). The value typically ranges from -1 to 1, where a higher
+            value means the vectors (and therefore the texts) are more similar.
+            Learn more:
+            <a
+              href="https://en.wikipedia.org/wiki/Cosine_similarity"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline ml-1 text-blue-600 dark:text-blue-400"
+            >
+              Wikipedia — Cosine similarity
+            </a>
+            .
+          </p>
+        </div>
       </main>
     </div>
   );
